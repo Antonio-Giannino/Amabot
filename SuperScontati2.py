@@ -15,7 +15,7 @@ TOKEN = "8881087185:AAFgDpXgtPLmx2VtAp2cDSEF8jpZn7aYxkk"
 
 # ⚠️ INSERISCI QUI IL LINK CHE TI DARA' RENDER.COM (Senza la barra / finale)
 # Esempio: "https://super-scontati-bot.onrender.com"
-URL_RENDER = "INSERISCI_QUI_IL_LINK_DI_RENDER"
+URL_RENDER = "https://amabot-rhkj.onrender.com"
 
 GRUPPO_ID = -1004474584375 
 TAG_AFFILIAZIONE = "agsmshop-21"

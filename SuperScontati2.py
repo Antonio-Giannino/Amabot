@@ -14,7 +14,6 @@ from flask import Flask, request
 TOKEN = "8881087185:AAFgDpXgtPLmx2VtAp2cDSEF8jpZn7aYxkk"
 
 # ⚠️ INSERISCI QUI IL LINK CHE TI DARA' RENDER.COM (Senza la barra / finale)
-# Esempio: "https://super-scontati-bot.onrender.com"
 URL_RENDER = "https://amabot-rhkj.onrender.com"
 
 GRUPPO_ID = -1004474584375 
@@ -94,7 +93,7 @@ def menu_principale(chat_id, message_id=None):
         btn_canale = types.InlineKeyboardButton("📢 Gestione Gruppo Forum", callback_data="menu_canale")
         markup.add(btn_auto, btn_manuale, btn_canale)
         
-        testo = "🛠️ **Pannello Controllo Bot Amazon**\nScegli la modalità di lavoro:"
+        testo = "🛠️ *Pannello Controllo Bot Amazon*\nScegli la modalità di lavoro:"
         if message_id:
             bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo, reply_markup=markup, parse_mode="Markdown")
         else:
@@ -117,7 +116,7 @@ def menu_auto(chat_id, message_id):
         markup.add(btn_errore)
         markup.add(btn_indietro)
         
-        testo = "🤖 **Impostazioni API Automatiche (In sviluppo)**\nPrepara i filtri per la ricerca:"
+        testo = "🤖 *Impostazioni API Automatiche (In sviluppo)*\nPrepara i filtri per la ricerca:"
         bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         menu_principale(chat_id)
@@ -129,8 +128,8 @@ def menu_canale(chat_id, message_id):
         btn_indietro = types.InlineKeyboardButton("🔙 Torna Indietro", callback_data="torna_principale")
         markup.add(btn_verifica, btn_indietro)
         
-        testo = (f"📢 **Gestione Gruppo Forum**\nID Gruppo impostato: `{GRUPPO_ID}`\n\n"
-                 f"⚠️ **ATTENZIONE:** Il bot DEVE essere Amministratore nel gruppo forum per poter inviare messaggi nei vari Topic.\n")
+        testo = (f"📢 *Gestione Gruppo Forum*\nID Gruppo impostato: `{GRUPPO_ID}`\n\n"
+                 f"⚠️ *ATTENZIONE:* Il bot DEVE essere Amministratore nel gruppo forum per poter inviare messaggi nei vari Topic.\n")
         bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         menu_principale(chat_id)
@@ -147,7 +146,7 @@ def sottomenu_categorie(chat_id, message_id):
         markup.add(types.InlineKeyboardButton("💾 Salva e Torna", callback_data="salva_categorie"))
         
         bot.edit_message_text(chat_id=chat_id, message_id=message_id, 
-                              text="📁 **Seleziona le categorie:**", reply_markup=markup, parse_mode="Markdown")
+                              text="📁 *Seleziona le categorie:*", reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         menu_principale(chat_id)
 
@@ -157,7 +156,7 @@ def chiedi_sconto(message):
         if not message.text: raise ValueError("Input vuoto")
         valore = int(message.text.strip().replace('%', '')) 
         impostazioni_bot["sconto_minimo"] = valore
-        bot.send_message(chat_id, f"✅ Perfetto! Cercherò solo prodotti con almeno il **{valore}%** di sconto.", parse_mode="Markdown")
+        bot.send_message(chat_id, f"✅ Perfetto! Cercherò solo prodotti con almeno il *{valore}%* di sconto.", parse_mode="Markdown")
         menu_principale(chat_id)
     except Exception as e:
         bot.send_message(chat_id, "❌ Errore: inserisci solo un NUMERO intero (es. 30). Riprova.")
@@ -218,7 +217,8 @@ def mostra_menu_modifiche(chat_id):
         btn_titolo = types.InlineKeyboardButton("📝 Titolo", callback_data="edit_titolo")
         btn_desc = types.InlineKeyboardButton("📝 Descrizione", callback_data="edit_desc")
         btn_prezzo = types.InlineKeyboardButton("💰 Prezzo", callback_data="edit_prezzo")
-        btn_risp = type.InlineKeyboardButton("💶 Risparmi", callback_data="edit_risparmio")
+        # CORREZIONE: Qui avevi scritto type invece di types
+        btn_risp = types.InlineKeyboardButton("💶 Risparmi", callback_data="edit_risparmio")
         btn_scad = types.InlineKeyboardButton("⏳ Scadenza", callback_data="edit_scadenza")
         btn_salva = types.InlineKeyboardButton("💾 SALVA E AGGIORNA ANTEPRIMA", callback_data="ritorna_anteprima")
         
@@ -227,8 +227,9 @@ def mostra_menu_modifiche(chat_id):
         markup.add(btn_scad)
         markup.add(btn_salva)
         
-        bot.send_message(chat_id, "⚙️ **PANNELLO DI MODIFICA POST**\nLe tue modifiche vengono salvate in memoria in background.\n\n_Scegli cosa modificare e clicca su **Salva e Aggiorna** solo quando hai finito!_", reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(chat_id, "⚙️ *PANNELLO DI MODIFICA POST*\nLe tue modifiche vengono salvate in memoria in background.\n\n_Scegli cosa modificare e clicca su *Salva e Aggiorna* solo quando hai finito!_", reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
+        print(f"Errore menu modifiche: {e}")
         menu_principale(chat_id)
 
 def chiedi_nuovo_titolo(message):
@@ -263,7 +264,8 @@ def chiedi_nuovo_prezzo(message):
         if not message.text: raise ValueError("Testo vuoto")
         if chat_id in post_in_sospeso:
             nuovo_testo = re.sub(r'[*_`\[\]]', '', message.text.strip())
-            post_in_sospeso[chat_id]['prezzo_riga'] = f"💰 *Prezzo:* {nuovo_testo}\n"
+            # MODIFICA: Prezzo in grassetto con A SOLI
+            post_in_sospeso[chat_id]['prezzo_riga'] = f"🔥 *A SOLI {nuovo_testo}*\n"
             bot.send_message(chat_id, "✅ Prezzo memorizzato nella bozza!")
             mostra_menu_modifiche(chat_id)
     except Exception:
@@ -276,7 +278,7 @@ def chiedi_nuovo_risparmio(message):
         if not message.text: raise ValueError("Testo vuoto")
         if chat_id in post_in_sospeso:
             nuovo_testo = re.sub(r'[*_`\[\]]', '', message.text.strip())
-            post_in_sospeso[chat_id]['risparmio_riga'] = f"💶 *Risparmio:* {nuovo_testo}\n"
+            post_in_sospeso[chat_id]['risparmio_riga'] = f"📉 *Risparmio:* {nuovo_testo}\n"
             bot.send_message(chat_id, "✅ Risparmio memorizzato nella bozza!")
             mostra_menu_modifiche(chat_id)
     except Exception:
@@ -316,7 +318,7 @@ def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
         markup.add(types.InlineKeyboardButton("🚀 CONFERMA E INVIA AI TOPIC", callback_data="conferma_e_pubblica_canale"))
         markup.add(types.InlineKeyboardButton("🔙 Annulla e Torna", callback_data="ritorna_anteprima_diretta"))
         
-        testo_selezione = "🏷️ **Seleziona uno o più Topic del Forum dove pubblicare l'offerta:**"
+        testo_selezione = "🏷️ *Seleziona uno o più Topic del Forum dove pubblicare l'offerta:*"
         
         if dati["immagine"]:
             try: bot.edit_message_caption(chat_id=chat_id, message_id=message_id, caption=testo_selezione, reply_markup=markup, parse_mode="Markdown")
@@ -452,10 +454,11 @@ def elabora_link_manuale(message):
             try: bot.delete_message(chat_id=chat_id, message_id=msg_caricamento.message_id)
             except: pass
 
+            # MODIFICA: Prezzo in grassetto con A SOLI per i nuovi post appena generati
             post_in_sospeso[chat_id] = {
                 "titolo": titolo_pulito,
                 "descrizione": descrizione_pulita,
-                "prezzo_riga": f"💰 *Prezzo:* {prezzo_attuale} {sconto_badge}\n",
+                "prezzo_riga": f"🔥 *A SOLI {prezzo_attuale}* {sconto_badge}\n",
                 "risparmio_riga": risparmio_badge,
                 "scadenza_riga": scadenza_badge,
                 "scadenza_cancellazione": None, 
@@ -505,7 +508,7 @@ def gestione_pulsanti(call):
             
         elif call.data == "menu_manuale":
             bot.answer_callback_query(call.id)
-            msg = bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="🔗 **Incolla qui l'URL di Amazon:**", parse_mode="Markdown")
+            msg = bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="🔗 *Incolla qui l'URL di Amazon:*", parse_mode="Markdown")
             bot.register_next_step_handler(msg, elabora_link_manuale)
 
         elif call.data == "pubblica_ora":
@@ -587,7 +590,7 @@ def gestione_pulsanti(call):
                     bot.answer_callback_query(call.id, f"✅ Pubblicato in {pubblicati_con_successo} stanze!")
                     try: bot.delete_message(chat_id, msg_id)
                     except: pass
-                    bot.send_message(chat_id, f"✅ **Post inviato in {pubblicati_con_successo} Topic differenti!**", parse_mode="Markdown")
+                    bot.send_message(chat_id, f"✅ *Post inviato in {pubblicati_con_successo} Topic differenti!*", parse_mode="Markdown")
                     del post_in_sospeso[chat_id]
                     menu_principale(chat_id)
                     
@@ -601,19 +604,24 @@ def gestione_pulsanti(call):
             mostra_menu_modifiche(chat_id)
             
         elif call.data == "edit_titolo":
-            msg = bot.send_message(chat_id, "✍️ Scrivi il **NUOVO TITOLO**:", parse_mode="Markdown")
+            msg = bot.send_message(chat_id, "✍️ Scrivi il *NUOVO TITOLO*:", parse_mode="Markdown")
             bot.register_next_step_handler(msg, chiedi_nuovo_titolo)
             
         elif call.data == "edit_desc":
-            msg = bot.send_message(chat_id, "✍️ Scrivi la **NUOVA DESCRIZIONE**:", parse_mode="Markdown")
+            msg = bot.send_message(chat_id, "✍️ Scrivi la *NUOVA DESCRIZIONE*:", parse_mode="Markdown")
             bot.register_next_step_handler(msg, chiedi_nuova_descrizione)
             
         elif call.data == "edit_prezzo":
-            msg = bot.send_message(chat_id, "✍️ Scrivi il **NUOVO PREZZO** (es. 19,99€):", parse_mode="Markdown")
+            msg = bot.send_message(chat_id, "✍️ Scrivi il *NUOVO PREZZO* (es. 19,99€):", parse_mode="Markdown")
             bot.register_next_step_handler(msg, chiedi_nuovo_prezzo)
             
+        # CORREZIONE: Ho aggiunto il pulsante mancante per farti inserire il risparmio
+        elif call.data == "edit_risparmio":
+            msg = bot.send_message(chat_id, "✍️ Scrivi il *NUOVO RISPARMIO* (es. 15,00€):", parse_mode="Markdown")
+            bot.register_next_step_handler(msg, chiedi_nuovo_risparmio)
+            
         elif call.data == "edit_scadenza":
-            msg = bot.send_message(chat_id, "✍️ Scrivi la **DATA DI SCADENZA** in formato GG/MM/AAAA:", parse_mode="Markdown")
+            msg = bot.send_message(chat_id, "✍️ Scrivi la *DATA DI SCADENZA* in formato GG/MM/AAAA:", parse_mode="Markdown")
             bot.register_next_step_handler(msg, chiedi_nuova_scadenza)
 
         elif call.data == "ritorna_anteprima":

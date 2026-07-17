@@ -218,11 +218,13 @@ def mostra_menu_modifiche(chat_id):
         btn_titolo = types.InlineKeyboardButton("📝 Titolo", callback_data="edit_titolo")
         btn_desc = types.InlineKeyboardButton("📝 Descrizione", callback_data="edit_desc")
         btn_prezzo = types.InlineKeyboardButton("💰 Prezzo", callback_data="edit_prezzo")
+        btn_risp = type.InlineKeyboardButton("💶 Risparmi", callback_data="edit_risparmio")
         btn_scad = types.InlineKeyboardButton("⏳ Scadenza", callback_data="edit_scadenza")
         btn_salva = types.InlineKeyboardButton("💾 SALVA E AGGIORNA ANTEPRIMA", callback_data="ritorna_anteprima")
         
         markup.add(btn_titolo, btn_desc)
-        markup.add(btn_prezzo, btn_scad)
+        markup.add(btn_prezzo, btn_risp)
+        markup.add(btn_scad)
         markup.add(btn_salva)
         
         bot.send_message(chat_id, "⚙️ **PANNELLO DI MODIFICA POST**\nLe tue modifiche vengono salvate in memoria in background.\n\n_Scegli cosa modificare e clicca su **Salva e Aggiorna** solo quando hai finito!_", reply_markup=markup, parse_mode="Markdown")
@@ -263,6 +265,19 @@ def chiedi_nuovo_prezzo(message):
             nuovo_testo = re.sub(r'[*_`\[\]]', '', message.text.strip())
             post_in_sospeso[chat_id]['prezzo_riga'] = f"💰 *Prezzo:* {nuovo_testo}\n"
             bot.send_message(chat_id, "✅ Prezzo memorizzato nella bozza!")
+            mostra_menu_modifiche(chat_id)
+    except Exception:
+        bot.send_message(chat_id, "❌ Testo non valido.")
+        mostra_menu_modifiche(chat_id)
+
+def chiedi_nuovo_risparmio(message):
+    chat_id = message.chat.id
+    try:
+        if not message.text: raise ValueError("Testo vuoto")
+        if chat_id in post_in_sospeso:
+            nuovo_testo = re.sub(r'[*_`\[\]]', '', message.text.strip())
+            post_in_sospeso[chat_id]['risparmio_riga'] = f"💶 *Risparmio:* {nuovo_testo}\n"
+            bot.send_message(chat_id, "✅ Risparmio memorizzato nella bozza!")
             mostra_menu_modifiche(chat_id)
     except Exception:
         bot.send_message(chat_id, "❌ Testo non valido.")

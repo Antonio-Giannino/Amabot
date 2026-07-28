@@ -13,9 +13,7 @@ from flask import Flask, request
 
 TOKEN = "8881087185:AAFgDpXgtPLmx2VtAp2cDSEF8jpZn7aYxkk"
 
-# ⚠️ INSERISCI QUI IL LINK CHE TI DARA' RENDER.COM (Senza la barra / finale)
 URL_RENDER = "https://amabot-rhkj.onrender.com"
-
 GRUPPO_ID = -1004474584375 
 TAG_AFFILIAZIONE = "agsmshop-21"
 CHIAVE_SCRAPERAPI = "65695565af4705f1753039e7ea57eb87"
@@ -23,7 +21,6 @@ CHIAVE_SCRAPERAPI = "65695565af4705f1753039e7ea57eb87"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# ⚙️ CONFIGURAZIONE CATEGORIE E THREAD ID (STANZE DEL FORUM)
 CAT_DISPONIBILI = {
     "412609031": {"nome": "💻 Elettronica", "tag": "Elettronica", "thread_id": 3}, 
     "425916031": {"nome": "🖥️ Informatica", "tag": "Informatica", "thread_id": 4}, 
@@ -48,14 +45,11 @@ impostazioni_bot = {
 
 post_in_sospeso = {}
 
-# ==========================================
-# GESTORE CANCELLAZIONE AUTOMATICA E PUBBLICAZIONE (BACKGROUND)
-# ==========================================
 post_da_cancellare = [] 
 post_programmati = []
 
 def thread_background():
-    """Controlla ogni 60 secondi i post da pubblicare e da eliminare."""
+    """Motore in background per pubblicazioni ed eliminazioni"""
     while True:
         try:
             ora_attuale = datetime.now()
@@ -91,16 +85,19 @@ def thread_background():
                                 msg_inviato = bot.send_message(GRUPPO_ID, p['testo'], parse_mode="Markdown", disable_web_page_preview=False, message_thread_id=t_id)
                             stanze_pubblicate += 1
                             
-                            # Se ha una scadenza, inseriamolo nella lista per eliminarlo poi
                             if p.get('scadenza_cancellazione') and msg_inviato:
                                 post_da_cancellare.append({
                                     'chat_id': GRUPPO_ID,
                                     'message_id': msg_inviato.message_id,
                                     'scadenza': p['scadenza_cancellazione']
                                 })
-                        except: pass
+                        except Exception as errore_invio:
+                            try: bot.send_message(p['chat_id'], f"❌ ERRORE PUBBLICAZIONE PROGRAMMATA: Impossibile inviare alla stanza {cat_info['nome']}. Errore tecnico: {errore_invio}")
+                            except: pass
                     
-                    try: bot.send_message(p['chat_id'], f"🚀 *IL POST PROGRAMMATO È ONLINE!*\nPubblicato in {stanze_pubblicate} topic con successo.", parse_mode="Markdown")
+                    try: 
+                        if stanze_pubblicate > 0:
+                            bot.send_message(p['chat_id'], f"🚀 *IL POST PROGRAMMATO È ONLINE!*\nPubblicato in {stanze_pubblicate} topic con successo.", parse_mode="Markdown")
                     except: pass
                     
                     da_rimuovere_prog.append(p)
@@ -115,10 +112,6 @@ def thread_background():
 
 t = threading.Thread(target=thread_background, daemon=True)
 t.start()
-
-# ==========================================
-# 1. MENU PRINCIPALE E SOTTOMENU
-# ==========================================
 
 def menu_principale(chat_id, message_id=None):
     try:
@@ -196,10 +189,6 @@ def chiedi_sconto(message):
     except Exception as e:
         bot.send_message(chat_id, "❌ Errore: inserisci solo un NUMERO intero (es. 30). Riprova.")
         menu_principale(chat_id)
-
-# ==========================================
-# 2. SISTEMA DI ANTEPRIMA E MENU MODIFICHE
-# ==========================================
 
 def mostra_anteprima(chat_id, message_id=None):
     try:
@@ -336,7 +325,6 @@ def chiedi_nuova_scadenza(message):
         bot.send_message(chat_id, "❌ Errore tecnico.")
         mostra_menu_modifiche(chat_id)
 
-
 def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
     try:
         dati = post_in_sospeso[chat_id]
@@ -349,7 +337,6 @@ def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
             pulsanti.append(types.InlineKeyboardButton(testo_btn, callback_data=f"pubcat_{codice}"))
             
         markup.add(*pulsanti)
-        # IL CAMBIAMENTO PIU' IMPORTANTE: non pubblica, ma prosegue con l'orario
         markup.add(types.InlineKeyboardButton("🚀 CONFERMA STANZE E PROCEDI", callback_data="conferma_stanze_orario"))
         markup.add(types.InlineKeyboardButton("🔙 Annulla e Torna", callback_data="ritorna_anteprima_diretta"))
         
@@ -362,6 +349,7 @@ def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
             try: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo_selezione, reply_markup=markup, parse_mode="Markdown")
             except: bot.send_message(chat_id, testo_selezione, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
+        bot.send_message(chat_id, f"❌ Errore selezione stanze: {e}")
         menu_principale(chat_id)
 
 def chiedi_orario_pubblicazione(chat_id, message_id):
@@ -387,6 +375,7 @@ def chiedi_orario_pubblicazione(chat_id, message_id):
             try: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo, reply_markup=markup, parse_mode="Markdown")
             except: bot.send_message(chat_id, testo, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
+        bot.send_message(chat_id, f"❌ Errore in orario pubblicazione: {e}")
         menu_principale(chat_id)
 
 def finalizza_pubblicazione(chat_id, msg_id, data_uscita):
@@ -414,6 +403,7 @@ def finalizza_pubblicazione(chat_id, msg_id, data_uscita):
             post_programmati.append({
                 'chat_id': chat_id,
                 'orario': data_uscita,
+                'titolo': dati['titolo'],
                 'categorie': dati["categorie_selezionate"].copy(),
                 'testo': testo_post_canale,
                 'immagine': dati['immagine'],
@@ -452,7 +442,8 @@ def finalizza_pubblicazione(chat_id, msg_id, data_uscita):
         menu_principale(chat_id)
         
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Errore tecnico: {e}")
+        # MESSAGGIO PARLANTE per capire dove si blocca
+        bot.send_message(chat_id, f"❌ *ERRORE DURANTE LA PUBBLICAZIONE!*\nIl post non è stato inviato al canale.\n\n_Dettaglio tecnico: {e}_", parse_mode="Markdown")
         menu_principale(chat_id)
 
 def imposta_orario_custom(message, msg_id):
@@ -470,7 +461,6 @@ def imposta_orario_custom(message, msg_id):
     except ValueError:
         bot.send_message(chat_id, "❌ Formato errato. Devi scrivere esattamente GG/MM/AAAA HH:MM (es. 25/12/2026 14:30).")
         chiedi_orario_pubblicazione(chat_id, msg_id)
-
 
 # ==========================================
 # 3. SCRAPER (ESTRAZIONE DATI)
@@ -578,8 +568,11 @@ def elabora_link_manuale(message):
             rating = rating_elem.get_text().strip().split()[0] if rating_elem else "-" 
             voti_elem = soup.select_one('#acrCustomerReviewText')
             voti = voti_elem.get_text().strip().split()[0] if voti_elem else "0"
+            
+            # PULIZIA ESTREMA DEL NOME VENDITORE PER EVITARE CRASH MARKDOWN
             venditore_elem = soup.select_one('#merchant-info a, #sellerProfileTriggerId')
             venditore = venditore_elem.get_text().strip() if venditore_elem else "Amazon"
+            venditore = re.sub(r'[*_`\[\]()]', '', venditore) 
             
             url_immagine = None
             img_elem = soup.select_one('#landingImage, #imgBlkFront, #main-image')
@@ -619,7 +612,7 @@ def elabora_link_manuale(message):
             menu_principale(chat_id)
             
     except Exception as e:
-        bot.send_message(chat_id, "❌ Si è verificato un problema tecnico. Torno al menù.")
+        bot.send_message(chat_id, f"❌ Errore critico scraper: {e}")
         menu_principale(chat_id)
 
 # ==========================================
@@ -674,7 +667,6 @@ def gestione_pulsanti(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
 
-        # IL NUOVO PASSAGGIO: Conferma stanze -> Chiede l'orario
         elif call.data == "conferma_stanze_orario":
             if chat_id in post_in_sospeso:
                 dati = post_in_sospeso[chat_id]
@@ -692,7 +684,6 @@ def gestione_pulsanti(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
 
-        # ESECUZIONE DELLE SCELTE DI ORARIO
         elif call.data.startswith("dopub_"):
             if chat_id not in post_in_sospeso:
                 return bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
@@ -707,10 +698,6 @@ def gestione_pulsanti(call):
                 minuti = int(valore)
                 orario_scelto = datetime.now() + timedelta(minutes=minuti) if minuti > 0 else datetime.now()
                 finalizza_pubblicazione(chat_id, msg_id, orario_scelto)
-
-        # --------------------------------------------
-        # I RESTANTI PULSANTI DEL MENU
-        # --------------------------------------------
 
         elif call.data == "menu_modifica":
             bot.answer_callback_query(call.id)
@@ -780,7 +767,7 @@ def gestione_pulsanti(call):
             menu_auto(chat_id, msg_id)
 
     except Exception as e:
-        try: bot.answer_callback_query(call.id, "❌ Errore", show_alert=True)
+        try: bot.answer_callback_query(call.id, "❌ Errore generico pulsante", show_alert=True)
         except: pass
         menu_principale(chat_id)
 
@@ -790,12 +777,10 @@ def gestione_pulsanti(call):
 
 @app.route('/', methods=['GET'])
 def ping():
-    """Questa pagina serve a cron-job.org per tenere sveglio il bot"""
     return "<h1>Il Bot Amazon è ONLINE! 🚀</h1>", 200
 
 @app.route('/' + TOKEN, methods=['POST'])
 def webhook_ricevi_messaggi():
-    """Qui Telegram invia i messaggi degli utenti al nostro server"""
     json_string = request.get_data().decode('utf-8')
     update = telebot.types.Update.de_json(json_string)
     bot.process_new_updates([update])
@@ -806,13 +791,11 @@ if __name__ == "__main__":
     time.sleep(1)
     
     if URL_RENDER != "INSERISCI_QUI_IL_LINK_DI_RENDER":
-        # Imposta il ponte invisibile tra Telegram e il tuo server web
         bot.set_webhook(url=f"{URL_RENDER}/{TOKEN}")
         print(f"✅ Webhook impostato su {URL_RENDER}/{TOKEN}")
     else:
-        print("⚠️ ATTENZIONE: URL_RENDER non è impostato! Modifica il codice dopo aver ottenuto il link da Render.com")
+        print("⚠️ ATTENZIONE: URL_RENDER non è impostato!")
         
-    # Avvia il server Flask. Su Render usa la porta data dal sistema, sul PC usa la porta 5000
     porta = int(os.environ.get("PORT", 5000))
     print(f"🚀 Server web avviato sulla porta {porta}")
     app.run(host="0.0.0.0", port=porta)

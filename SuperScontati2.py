@@ -11,9 +11,19 @@ from datetime import datetime, timedelta
 import os
 from flask import Flask, request
 
+# --- FORZATURA FUSO ORARIO ITALIANO ---
+try:
+    os.environ['TZ'] = 'Europe/Rome'
+    time.tzset()
+except AttributeError:
+    pass # Evita errori se lo avvii per test su un PC Windows
+# --------------------------------------
+
 TOKEN = "8881087185:AAFgDpXgtPLmx2VtAp2cDSEF8jpZn7aYxkk"
 
+# ⚠️ INSERISCI QUI IL LINK CHE TI DARA' RENDER.COM (Senza la barra / finale)
 URL_RENDER = "https://amabot-rhkj.onrender.com"
+
 GRUPPO_ID = -1004474584375 
 TAG_AFFILIAZIONE = "agsmshop-21"
 CHIAVE_SCRAPERAPI = "65695565af4705f1753039e7ea57eb87"
@@ -21,6 +31,7 @@ CHIAVE_SCRAPERAPI = "65695565af4705f1753039e7ea57eb87"
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
+# ⚙️ CONFIGURAZIONE CATEGORIE E THREAD ID (STANZE DEL FORUM)
 CAT_DISPONIBILI = {
     "412609031": {"nome": "💻 Elettronica", "tag": "Elettronica", "thread_id": 3}, 
     "425916031": {"nome": "🖥️ Informatica", "tag": "Informatica", "thread_id": 4}, 
@@ -45,11 +56,14 @@ impostazioni_bot = {
 
 post_in_sospeso = {}
 
+# ==========================================
+# GESTORE CANCELLAZIONE AUTOMATICA E PUBBLICAZIONE (BACKGROUND)
+# ==========================================
 post_da_cancellare = [] 
 post_programmati = []
 
 def thread_background():
-    """Motore in background per pubblicazioni ed eliminazioni"""
+    """Controlla ogni 60 secondi i post da pubblicare e da eliminare."""
     while True:
         try:
             ora_attuale = datetime.now()
@@ -112,6 +126,10 @@ def thread_background():
 
 t = threading.Thread(target=thread_background, daemon=True)
 t.start()
+
+# ==========================================
+# 1. MENU PRINCIPALE E SOTTOMENU
+# ==========================================
 
 def menu_principale(chat_id, message_id=None):
     try:
@@ -442,7 +460,6 @@ def finalizza_pubblicazione(chat_id, msg_id, data_uscita):
         menu_principale(chat_id)
         
     except Exception as e:
-        # MESSAGGIO PARLANTE per capire dove si blocca
         bot.send_message(chat_id, f"❌ *ERRORE DURANTE LA PUBBLICAZIONE!*\nIl post non è stato inviato al canale.\n\n_Dettaglio tecnico: {e}_", parse_mode="Markdown")
         menu_principale(chat_id)
 

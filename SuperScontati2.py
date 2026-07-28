@@ -7,7 +7,7 @@ import urllib.parse
 from bs4 import BeautifulSoup
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from flask import Flask, request
 
@@ -49,36 +49,71 @@ impostazioni_bot = {
 post_in_sospeso = {}
 
 # ==========================================
-# GESTORE CANCELLAZIONE AUTOMATICA (BACKGROUND)
+# GESTORE CANCELLAZIONE AUTOMATICA E PUBBLICAZIONE (BACKGROUND)
 # ==========================================
 post_da_cancellare = [] 
+post_programmati = []
 
-def thread_cancellazione_automatica():
-    """Controlla ogni 60 secondi se ci sono post scaduti da eliminare."""
+def thread_background():
+    """Controlla ogni 60 secondi i post da pubblicare e da eliminare."""
     while True:
         try:
             ora_attuale = datetime.now()
-            da_rimuovere = []
             
+            # --- 1. ELIMINA POST SCADUTI ---
+            da_rimuovere_canc = []
             for item in post_da_cancellare:
                 if ora_attuale > item['scadenza']:
                     try:
                         bot.delete_message(item['chat_id'], item['message_id'])
-                        print(f"✅ Post {item['message_id']} eliminato automaticamente per scadenza.")
-                    except Exception as e:
-                        print(f"⚠️ Impossibile eliminare il post {item['message_id']}: {e}")
-                    
-                    da_rimuovere.append(item)
+                        print(f"✅ Post {item['message_id']} eliminato.")
+                    except: pass
+                    da_rimuovere_canc.append(item)
             
-            for item in da_rimuovere:
+            for item in da_rimuovere_canc:
                 post_da_cancellare.remove(item)
-                
+
+            # --- 2. PUBBLICA POST PROGRAMMATI ---
+            da_rimuovere_prog = []
+            for p in post_programmati:
+                if ora_attuale >= p['orario']:
+                    stanze_pubblicate = 0
+                    for codice in p['categorie']:
+                        cat_info = CAT_DISPONIBILI.get(codice)
+                        if not cat_info or not cat_info["thread_id"]: continue
+                        t_id = cat_info["thread_id"]
+                        
+                        try:
+                            msg_inviato = None
+                            if p['immagine']:
+                                msg_inviato = bot.send_photo(GRUPPO_ID, photo=p['immagine'], caption=p['testo'], parse_mode="Markdown", message_thread_id=t_id)
+                            else:
+                                msg_inviato = bot.send_message(GRUPPO_ID, p['testo'], parse_mode="Markdown", disable_web_page_preview=False, message_thread_id=t_id)
+                            stanze_pubblicate += 1
+                            
+                            # Se ha una scadenza, inseriamolo nella lista per eliminarlo poi
+                            if p.get('scadenza_cancellazione') and msg_inviato:
+                                post_da_cancellare.append({
+                                    'chat_id': GRUPPO_ID,
+                                    'message_id': msg_inviato.message_id,
+                                    'scadenza': p['scadenza_cancellazione']
+                                })
+                        except: pass
+                    
+                    try: bot.send_message(p['chat_id'], f"🚀 *IL POST PROGRAMMATO È ONLINE!*\nPubblicato in {stanze_pubblicate} topic con successo.", parse_mode="Markdown")
+                    except: pass
+                    
+                    da_rimuovere_prog.append(p)
+                    
+            for p in da_rimuovere_prog:
+                post_programmati.remove(p)
+
         except Exception as e:
-            print(f"Errore nel thread di cancellazione: {e}")
+            print(f"Errore nel thread di background: {e}")
             
         time.sleep(60)
 
-t = threading.Thread(target=thread_cancellazione_automatica, daemon=True)
+t = threading.Thread(target=thread_background, daemon=True)
 t.start()
 
 # ==========================================
@@ -226,7 +261,7 @@ def mostra_menu_modifiche(chat_id):
         markup.add(btn_scad)
         markup.add(btn_salva)
         
-        bot.send_message(chat_id, "⚙️ *PANNELLO DI MODIFICA POST*\nLe tue modifiche vengono salvate in memoria in background.\n\n_Scegli cosa modificare e clicca su *Salva e Aggiorna* solo quando hai finito!_", reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(chat_id, "⚙️ *PANNELLO DI MODIFICA POST*\nLe tue modifiche vengono salvate in memoria.\n\n_Scegli cosa modificare e clicca su *Salva e Aggiorna* solo quando hai finito!_", reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         print(f"Errore menu modifiche: {e}")
         menu_principale(chat_id)
@@ -301,6 +336,7 @@ def chiedi_nuova_scadenza(message):
         bot.send_message(chat_id, "❌ Errore tecnico.")
         mostra_menu_modifiche(chat_id)
 
+
 def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
     try:
         dati = post_in_sospeso[chat_id]
@@ -313,7 +349,8 @@ def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
             pulsanti.append(types.InlineKeyboardButton(testo_btn, callback_data=f"pubcat_{codice}"))
             
         markup.add(*pulsanti)
-        markup.add(types.InlineKeyboardButton("🚀 CONFERMA E INVIA AI TOPIC", callback_data="conferma_e_pubblica_canale"))
+        # IL CAMBIAMENTO PIU' IMPORTANTE: non pubblica, ma prosegue con l'orario
+        markup.add(types.InlineKeyboardButton("🚀 CONFERMA STANZE E PROCEDI", callback_data="conferma_stanze_orario"))
         markup.add(types.InlineKeyboardButton("🔙 Annulla e Torna", callback_data="ritorna_anteprima_diretta"))
         
         testo_selezione = "🏷️ *Seleziona uno o più Topic del Forum dove pubblicare l'offerta:*"
@@ -326,6 +363,114 @@ def mostra_selezione_categorie_pubblicazione(chat_id, message_id):
             except: bot.send_message(chat_id, testo_selezione, reply_markup=markup, parse_mode="Markdown")
     except Exception as e:
         menu_principale(chat_id)
+
+def chiedi_orario_pubblicazione(chat_id, message_id):
+    try:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(types.InlineKeyboardButton("🚀 Pubblica Immediatamente", callback_data="dopub_0"))
+        markup.add(
+            types.InlineKeyboardButton("🕒 Tra 30 min", callback_data="dopub_30"),
+            types.InlineKeyboardButton("🕒 Tra 1 ora", callback_data="dopub_60")
+        )
+        markup.add(
+            types.InlineKeyboardButton("🕒 Tra 2 ore", callback_data="dopub_120"),
+            types.InlineKeyboardButton("📅 Personalizzato", callback_data="dopub_custom")
+        )
+        markup.add(types.InlineKeyboardButton("🔙 Cambia Stanze", callback_data="pubblica_ora"))
+        
+        testo = "⏰ *QUANDO vuoi pubblicare questo post?*\nScegli un'opzione qui sotto:"
+        
+        if post_in_sospeso[chat_id]["immagine"]:
+            try: bot.edit_message_caption(chat_id=chat_id, message_id=message_id, caption=testo, reply_markup=markup, parse_mode="Markdown")
+            except: bot.send_message(chat_id, testo, reply_markup=markup, parse_mode="Markdown")
+        else:
+            try: bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=testo, reply_markup=markup, parse_mode="Markdown")
+            except: bot.send_message(chat_id, testo, reply_markup=markup, parse_mode="Markdown")
+    except Exception as e:
+        menu_principale(chat_id)
+
+def finalizza_pubblicazione(chat_id, msg_id, data_uscita):
+    try:
+        dati = post_in_sospeso.get(chat_id)
+        if not dati: return bot.send_message(chat_id, "❌ Post scaduto.")
+        
+        hashtags = [f"#{CAT_DISPONIBILI[c]['tag']}" for c in dati["categorie_selezionate"] if c in CAT_DISPONIBILI]
+        stringa_hashtags = " " + " ".join(hashtags) if hashtags else ""
+        
+        testo_post_canale = (
+            f"‎\n*{dati['titolo']}*\n\n"
+            f"_{dati['descrizione']}_\n\n"
+            f"{dati['prezzo_riga']}"
+            f"{dati['risparmio_riga']}"
+            f"{dati['scadenza_riga']}"
+            f"{dati['recensioni_riga']}"
+            f"{dati['venditore_riga']}"
+            f"{stringa_hashtags}\n\n"
+            f"🛒 [👉 VAI ALL'OFFERTA]({dati['link']})"
+        )
+
+        # SE È NEL FUTURO -> PROGRAMMA
+        if data_uscita > datetime.now() + timedelta(seconds=10):
+            post_programmati.append({
+                'chat_id': chat_id,
+                'orario': data_uscita,
+                'categorie': dati["categorie_selezionate"].copy(),
+                'testo': testo_post_canale,
+                'immagine': dati['immagine'],
+                'scadenza_cancellazione': dati.get('scadenza_cancellazione')
+            })
+            try: bot.delete_message(chat_id, msg_id)
+            except: pass
+            formato_orario = data_uscita.strftime("%d/%m/%Y alle %H:%M")
+            bot.send_message(chat_id, f"✅ *POST PROGRAMMATO!*\nUscirà automaticamente il {formato_orario} in {len(dati['categorie_selezionate'])} topic.", parse_mode="Markdown")
+        
+        # ALTRIMENTI -> PUBBLICA SUBITO
+        else:
+            pubblicati_con_successo = 0
+            for codice in dati["categorie_selezionate"]:
+                cat_info = CAT_DISPONIBILI[codice]
+                t_id = cat_info["thread_id"] 
+                
+                msg_inviato = None
+                if dati["immagine"]:
+                    msg_inviato = bot.send_photo(GRUPPO_ID, photo=dati["immagine"], caption=testo_post_canale, parse_mode="Markdown", message_thread_id=t_id)
+                else:
+                    msg_inviato = bot.send_message(GRUPPO_ID, testo_post_canale, parse_mode="Markdown", disable_web_page_preview=False, message_thread_id=t_id)
+                pubblicati_con_successo += 1
+                
+                if dati.get('scadenza_cancellazione'):
+                    post_da_cancellare.append({
+                        'chat_id': GRUPPO_ID,
+                        'message_id': msg_inviato.message_id,
+                        'scadenza': dati['scadenza_cancellazione']
+                    })
+            try: bot.delete_message(chat_id, msg_id)
+            except: pass
+            bot.send_message(chat_id, f"✅ *POST PUBBLICATO IMMEDIATAMENTE in {pubblicati_con_successo} Topic differenti!*", parse_mode="Markdown")
+
+        del post_in_sospeso[chat_id]
+        menu_principale(chat_id)
+        
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Errore tecnico: {e}")
+        menu_principale(chat_id)
+
+def imposta_orario_custom(message, msg_id):
+    chat_id = message.chat.id
+    try:
+        if not message.text: raise ValueError("Vuoto")
+        testo_data = message.text.strip()
+        data_uscita = datetime.strptime(testo_data, "%d/%m/%Y %H:%M")
+        
+        if data_uscita < datetime.now():
+            bot.send_message(chat_id, "❌ L'orario inserito è già passato. Riprova.")
+            chiedi_orario_pubblicazione(chat_id, msg_id)
+        else:
+            finalizza_pubblicazione(chat_id, msg_id, data_uscita)
+    except ValueError:
+        bot.send_message(chat_id, "❌ Formato errato. Devi scrivere esattamente GG/MM/AAAA HH:MM (es. 25/12/2026 14:30).")
+        chiedi_orario_pubblicazione(chat_id, msg_id)
+
 
 # ==========================================
 # 3. SCRAPER (ESTRAZIONE DATI)
@@ -529,10 +674,10 @@ def gestione_pulsanti(call):
             else:
                 bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
 
-        elif call.data == "conferma_e_pubblica_canale":
+        # IL NUOVO PASSAGGIO: Conferma stanze -> Chiede l'orario
+        elif call.data == "conferma_stanze_orario":
             if chat_id in post_in_sospeso:
                 dati = post_in_sospeso[chat_id]
-                
                 if not dati["categorie_selezionate"]:
                     bot.answer_callback_query(call.id, "❌ Seleziona almeno una stanza!", show_alert=True)
                     return
@@ -540,61 +685,32 @@ def gestione_pulsanti(call):
                 for codice in dati["categorie_selezionate"]:
                     cat_info = CAT_DISPONIBILI[codice]
                     if cat_info["thread_id"] is None:
-                        bot.answer_callback_query(
-                            call.id, 
-                            f"⚠️ Crea la categoria '{cat_info['nome']}' sul canale e inserisci il suo ID!", 
-                            show_alert=True
-                        )
+                        bot.answer_callback_query(call.id, f"⚠️ Manca l'ID stanza per '{cat_info['nome']}'!", show_alert=True)
                         return 
-
-                hashtags = [f"#{CAT_DISPONIBILI[c]['tag']}" for c in dati["categorie_selezionate"] if c in CAT_DISPONIBILI]
-                stringa_hashtags = " " + " ".join(hashtags) if hashtags else ""
-                
-                testo_post_canale = (
-                    f"‎\n*{dati['titolo']}*\n\n"
-                    f"_{dati['descrizione']}_\n\n"
-                    f"{dati['prezzo_riga']}"
-                    f"{dati['risparmio_riga']}"
-                    f"{dati['scadenza_riga']}"
-                    f"{dati['recensioni_riga']}"
-                    f"{dati['venditore_riga']}"
-                    f"{stringa_hashtags}\n\n"
-                    f"🛒 [👉 VAI ALL'OFFERTA]({dati['link']})"
-                )
-
-                try:
-                    pubblicati_con_successo = 0
-                    
-                    for codice in dati["categorie_selezionate"]:
-                        cat_info = CAT_DISPONIBILI[codice]
-                        t_id = cat_info["thread_id"] 
-                        
-                        msg_inviato = None
-                        if dati["immagine"]:
-                            msg_inviato = bot.send_photo(GRUPPO_ID, photo=dati["immagine"], caption=testo_post_canale, parse_mode="Markdown", message_thread_id=t_id)
-                        else:
-                            msg_inviato = bot.send_message(GRUPPO_ID, testo_post_canale, parse_mode="Markdown", disable_web_page_preview=False, message_thread_id=t_id)
-                        
-                        pubblicati_con_successo += 1
-                        
-                        if dati.get('scadenza_cancellazione'):
-                            post_da_cancellare.append({
-                                'chat_id': GRUPPO_ID,
-                                'message_id': msg_inviato.message_id,
-                                'scadenza': dati['scadenza_cancellazione']
-                            })
-                    
-                    bot.answer_callback_query(call.id, f"✅ Pubblicato in {pubblicati_con_successo} stanze!")
-                    try: bot.delete_message(chat_id, msg_id)
-                    except: pass
-                    bot.send_message(chat_id, f"✅ *Post inviato in {pubblicati_con_successo} Topic differenti!*", parse_mode="Markdown")
-                    del post_in_sospeso[chat_id]
-                    menu_principale(chat_id)
-                    
-                except Exception as e:
-                    bot.answer_callback_query(call.id, f"❌ Errore d'invio: {e}", show_alert=True)
+                bot.answer_callback_query(call.id)
+                chiedi_orario_pubblicazione(chat_id, msg_id)
             else:
                 bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
+
+        # ESECUZIONE DELLE SCELTE DI ORARIO
+        elif call.data.startswith("dopub_"):
+            if chat_id not in post_in_sospeso:
+                return bot.answer_callback_query(call.id, "❌ Post scaduto.", show_alert=True)
+            
+            valore = call.data.split("_")[1]
+            if valore == "custom":
+                bot.answer_callback_query(call.id)
+                msg = bot.send_message(chat_id, "✍️ Scrivi data e ora in formato *GG/MM/AAAA HH:MM*\n(Esempio: 25/12/2026 14:30):", parse_mode="Markdown")
+                bot.register_next_step_handler(msg, imposta_orario_custom, msg_id)
+            else:
+                bot.answer_callback_query(call.id)
+                minuti = int(valore)
+                orario_scelto = datetime.now() + timedelta(minutes=minuti) if minuti > 0 else datetime.now()
+                finalizza_pubblicazione(chat_id, msg_id, orario_scelto)
+
+        # --------------------------------------------
+        # I RESTANTI PULSANTI DEL MENU
+        # --------------------------------------------
 
         elif call.data == "menu_modifica":
             bot.answer_callback_query(call.id)

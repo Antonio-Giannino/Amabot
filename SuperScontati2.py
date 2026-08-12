@@ -25,7 +25,7 @@ TOKEN = "8881087185:AAFgDpXgtPLmx2VtAp2cDSEF8jpZn7aYxkk"
 URL_RENDER = "https://amabot-rhkj.onrender.com"
 
 GRUPPO_ID = -1004474584375 
-TAG_AFFILIAZIONE = "agsmshop-21"
+TAG_AFFILIAZIONE = "listiamo-21"
 CHIAVE_SCRAPERAPI = "65695565af4705f1753039e7ea57eb87"
 
 bot = telebot.TeleBot(TOKEN)
